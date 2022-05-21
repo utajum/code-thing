@@ -4,31 +4,41 @@ import { Log } from "./envSetup";
 const allowedSecialCharacters = ["@", "+", "-", "|", " ", "\n"];
 
 export const findFakeTurn = (cSystem: CoordinateSystem) => {
-  const turnCoordinates = cSystem.find((e) => {
-    if (e.character === "+") {
-      return e;
-    }
-  });
-  const hasXNeighbour = cSystem.find((e) => {
-    if (
-      e.xPosition === turnCoordinates.xPosition + 1 ||
-      e.xPosition === turnCoordinates.xPosition - 1
-    ) {
-      return e;
-    }
-  });
+  const findFake = cSystem
+    .map((turnCoordinates) => {
+      if (turnCoordinates.character === "+") {
+        const hasXNeighbour = cSystem.find((e) => {
+          if (
+            e.xPosition === turnCoordinates.xPosition + 1 ||
+            e.xPosition === turnCoordinates.xPosition - 1
+          ) {
+            return e;
+          }
+        });
 
-  const hasYNeighbour = cSystem.find((e) => {
-    if (
-      e.yPosition === turnCoordinates.yPosition + 1 ||
-      e.yPosition === turnCoordinates.yPosition - 1
-    ) {
-      return e;
-    }
-  });
-  const isFake = !(hasXNeighbour && hasYNeighbour);
+        const hasYNeighbour = cSystem.find((e) => {
+          if (
+            e.yPosition === turnCoordinates.yPosition + 1 ||
+            e.yPosition === turnCoordinates.yPosition - 1
+          ) {
+            return e;
+          }
+        });
+        const isFake = !(hasXNeighbour && hasYNeighbour);
 
-  return isFake;
+        if (isFake) {
+          return true;
+        }
+        return null;
+      }
+      return null;
+    })
+    .filter((e) => e);
+
+  if (findFake.length) {
+    return true;
+  }
+  return false;
 };
 
 const validateNext = (character: string) => {
@@ -414,13 +424,20 @@ export const processFile = (mapFile: MapFile, failedFiles: string[]) => {
 
     const hasFakeTurn = findFakeTurn(cSystem);
 
-    const { pathAsCharacters, letters, hasError } = walkOver(cSystem, mapFile);
-
-    if (hasError || hasFakeTurn) {
+    if (hasFakeTurn) {
       Log.error("Error while processing map " + mapFile.filename);
       failedFiles.push(mapFile.filename);
       return;
     }
+
+    const { pathAsCharacters, letters, hasError } = walkOver(cSystem, mapFile);
+
+    if (hasFakeTurn) {
+      Log.error("Error while processing map " + mapFile.filename);
+      failedFiles.push(mapFile.filename);
+      return;
+    }
+
     Log.info("Letters:");
     console.log(letters);
     console.log("");
