@@ -1,0 +1,9 @@
+export type CoordinatesObject = {
+  character: string;
+  yPosition: number;
+  xPosition: number;
+};
+
+export type CoordinateSystem = Array<CoordinatesObject>;
+
+export type MapFile = { filename: string; fileData: string };

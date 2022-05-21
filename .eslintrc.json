@@ -1,0 +1,24 @@
+{
+  "parser": "babel-eslint",
+  "env": {
+    "browser": false,
+    "commonjs": true,
+    "es6": true,
+    "node": true,
+    "jest": true
+  },
+  "extends": ["airbnb"],
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "rules": {
+    "import/extensions": 0,
+    "import/prefer-default-export": 0,
+    "no-console": "off",
+    "no-restricted-syntax": 0,
+    "prefer-destructuring": 0,
+    "no-continue": 0,
+    "no-await-in-loop": 0,
+    "no-loop-func": 0
+  }
+}
