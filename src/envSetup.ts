@@ -1,14 +1,7 @@
-import winston from "winston";
+export const Log = {} as any;
 
-export const Log = winston.createLogger({
-  format: winston.format.simple(),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }),
-    new winston.transports.File({ filename: "build/log.txt" }),
-  ],
-});
+// fun with colors
+Log.error = (...arg: any) => console.log("\x1b[31m%s", ...arg);
+Log.info = (...arg: any) => console.log("\x1b[33m%s\x1b[0m", ...arg);
+Log.green = (...arg: any) => console.log("\x1b[32m%s", ...arg);
+Log.blue = (...arg: any) => console.log("\x1b[1m%s", ...arg);

@@ -2,31 +2,71 @@ import { CoordinateSystem, CoordinatesObject, MapFile } from "./types";
 import { Log } from "./envSetup";
 
 const allowedSecialCharacters = ["@", "+", "-", "|", " ", "\n"];
+const validCharactersToJump = ["-"];
+const notAllowedHorizontalAdvance = ["|"];
+const notAllowedVerticalAdvance = ["-"];
+
+const watchForForks = (
+  prev: CoordinatesObject,
+  next: CoordinateSystem,
+  result: CoordinateSystem
+) => {
+  if (prev.character === "+" && next.length > 1) {
+    let hasFork = false;
+    const yNeighbours = next.filter(
+      (e) =>
+        (e.xPosition === prev.xPosition &&
+          e.yPosition === prev.yPosition + 1) ||
+        e.yPosition === prev.yPosition - 1
+    );
+
+    const xNeighbours = next.filter(
+      (e) =>
+        (e.yPosition === prev.yPosition &&
+          e.xPosition === prev.xPosition + 1) ||
+        e.xPosition === prev.xPosition - 1
+    );
+
+    if (yNeighbours.length === next.length) {
+      hasFork = true;
+    }
+    if (xNeighbours.length === next.length) {
+      hasFork = true;
+    }
+    if (hasFork) {
+      result.push({
+        character: "",
+        xPosition: 0,
+        yPosition: 0,
+        error: true,
+      });
+      return;
+    }
+    return;
+  }
+  return;
+};
 
 export const findFakeTurn = (cSystem: CoordinateSystem) => {
-  const findFake = cSystem
+  const hasErrors = cSystem
     .map((turnCoordinates) => {
       if (turnCoordinates.character === "+") {
-        const hasXNeighbour = cSystem.find((e) => {
+        const xNeighbours = cSystem.filter((e) => {
           if (
-            e.xPosition === turnCoordinates.xPosition + 1 ||
-            e.xPosition === turnCoordinates.xPosition - 1
+            (e.xPosition === turnCoordinates.xPosition + 1 ||
+              e.xPosition === turnCoordinates.xPosition - 1) &&
+            e.yPosition === turnCoordinates.yPosition &&
+            e.character !== " "
           ) {
             return e;
           }
         });
 
-        const hasYNeighbour = cSystem.find((e) => {
-          if (
-            e.yPosition === turnCoordinates.yPosition + 1 ||
-            e.yPosition === turnCoordinates.yPosition - 1
-          ) {
-            return e;
-          }
-        });
-        const isFake = !(hasXNeighbour && hasYNeighbour);
+        // if + character has two adjacent values on the x-axis, then its a fake turn
+        // no examples provided for y-axis, so not implemented
+        const hasFakeTurn = xNeighbours.length > 1;
 
-        if (isFake) {
+        if (hasFakeTurn) {
           return true;
         }
         return null;
@@ -35,275 +75,257 @@ export const findFakeTurn = (cSystem: CoordinateSystem) => {
     })
     .filter((e) => e);
 
-  if (findFake.length) {
+  if (hasErrors.length) {
     return true;
   }
   return false;
 };
 
-const validateNext = (character: string) => {
-  if (
-    character === "-" ||
-    character === "+" ||
-    character === "|" ||
-    character === "x" ||
-    /[A-Z]/.test(character)
-  ) {
-    return true;
-  }
-  return false;
-};
-
-let passedCoordinates: Array<{
-  file: MapFile;
-  coordinates: CoordinatesObject;
-}> = [];
-
-let passedOnceCoordinates: Array<{
-  file: MapFile;
-  coordinates: CoordinatesObject;
-}> = [];
-
-export const isCollectedTwice = (
-  cSystem: CoordinateSystem,
-  corToTest: CoordinatesObject
+// self explanitory
+const calculateDirection = (
+  pointOne: CoordinatesObject,
+  pointTwo: CoordinatesObject
 ) => {
-  const hasXLeftNeighbour = cSystem.find((e) => {
-    if (
-      e.xPosition === corToTest.xPosition - 1 &&
-      e.yPosition === corToTest.yPosition &&
-      validateNext(e.character)
-    ) {
-      return e;
-    }
-  });
-
-  const hasXRightNeighbour = cSystem.find((e) => {
-    if (
-      e.xPosition === corToTest.xPosition + 1 &&
-      e.yPosition === corToTest.yPosition &&
-      validateNext(e.character)
-    ) {
-      return e;
-    }
-  });
-
-  const hasYUpNeighbour = cSystem.find((e) => {
-    if (
-      e.yPosition === corToTest.yPosition + 1 &&
-      e.xPosition === corToTest.xPosition &&
-      validateNext(e.character)
-    ) {
-      return e;
-    }
-  });
-
-  const hasYDownNeighbour = cSystem.find((e) => {
-    if (
-      e.yPosition === corToTest.yPosition - 1 &&
-      e.xPosition === corToTest.xPosition &&
-      validateNext(e.character)
-    ) {
-      return e;
-    }
-  });
+  if (!pointOne || !pointTwo) {
+    return;
+  }
+  let direction = null;
+  if (
+    pointOne.xPosition > pointTwo.xPosition &&
+    pointTwo.yPosition === pointOne.yPosition
+  ) {
+    direction = "left";
+  }
+  if (
+    pointOne.xPosition < pointTwo.xPosition &&
+    pointTwo.yPosition === pointOne.yPosition
+  ) {
+    direction = "right";
+  }
 
   if (
-    hasXLeftNeighbour &&
-    hasXRightNeighbour &&
-    hasYUpNeighbour &&
-    hasYDownNeighbour
+    pointOne.yPosition > pointTwo.yPosition &&
+    pointTwo.xPosition === pointOne.xPosition
   ) {
-    return {
-      corToTest,
-      hasXLeftNeighbour,
-      hasXRightNeighbour,
-      hasYUpNeighbour,
-      hasYDownNeighbour,
-    };
+    direction = "down";
   }
-
-  return false;
+  if (
+    pointOne.yPosition < pointTwo.yPosition &&
+    pointTwo.xPosition === pointOne.xPosition
+  ) {
+    direction = "up";
+  }
+  return direction;
 };
 
-export const findPossibleNext = (
+const pushToResult = (value: CoordinatesObject, result: CoordinateSystem) => {
+  const isAlreadyCollectedLetter = result.find(
+    (e) =>
+      /[A-Z]/.test(value.character) &&
+      e.xPosition === value.xPosition &&
+      e.yPosition === value.yPosition
+  );
+  // mark already collected letters
+  if (isAlreadyCollectedLetter) {
+    result.push({ ...value, alreadyCollected: true });
+    return;
+  }
+  result.push(value);
+  return;
+};
+
+const findPossibleNext = (
   cSystem: CoordinateSystem,
-  coordinatesToTest: CoordinatesObject,
-  mapFile: MapFile,
-  result: any = [],
-  result2: any = []
+  coordinates: CoordinatesObject,
+  result: CoordinateSystem = []
 ) => {
-  const possibleNextX = cSystem.filter((e) => {
-    if (
-      e.xPosition === coordinatesToTest.xPosition + 1 &&
-      e.yPosition === coordinatesToTest.yPosition
-    ) {
-      if (e.character === "|") {
-        return false;
+  const prev = result[result.length - 1];
+  const prevPrev = result[result.length - 2];
+
+  // stop execution when end character has been added
+  if (prev.character === "x") {
+    return;
+  }
+
+  const next = cSystem
+    // filter out whitespace
+    .filter((e) => e.character !== " ")
+    // leave only possible (adjacent)  x, y coordinates
+    .filter(
+      (e) =>
+        ([coordinates.yPosition + 1, coordinates.yPosition - 1].includes(
+          e.yPosition
+        ) &&
+          e.xPosition === coordinates.xPosition) ||
+        ([coordinates.xPosition + 1, coordinates.xPosition - 1].includes(
+          e.xPosition
+        ) &&
+          e.yPosition === coordinates.yPosition)
+    )
+    // never go back one place
+    .filter(
+      (e) => !(e.xPosition === prev.xPosition && e.yPosition === prev.yPosition)
+    )
+    // never go back two places
+    .filter(
+      (e) =>
+        !(
+          e.xPosition === prevPrev?.xPosition &&
+          e.yPosition === prevPrev?.yPosition
+        )
+    )
+    // trim forbidden advance characters per direction
+    .filter((e) => {
+      const possibleDirection = calculateDirection(prev, e);
+      if (!possibleDirection) {
+        return true;
       }
 
-      return validateNext(e.character);
-    }
-
-    if (
-      e.xPosition === coordinatesToTest.xPosition - 1 &&
-      e.yPosition === coordinatesToTest.yPosition
-    ) {
-      if (e.character === "|") {
-        return false;
+      if (possibleDirection === "left") {
+        return !notAllowedHorizontalAdvance.includes(e.character);
       }
-      return validateNext(e.character);
-    }
-
-    return false;
-  });
-
-  const possibleNextY = cSystem.filter((e) => {
-    if (
-      e.xPosition === coordinatesToTest.xPosition &&
-      e.yPosition === coordinatesToTest.yPosition + 1
-    ) {
-      if (e.character === "-") {
-        return false;
+      if (possibleDirection === "right") {
+        return !notAllowedHorizontalAdvance.includes(e.character);
       }
-      return validateNext(e.character);
-    }
-    if (
-      e.xPosition === coordinatesToTest.xPosition &&
-      e.yPosition === coordinatesToTest.yPosition - 1
-    ) {
-      if (e.character === "-") {
-        return false;
+      if (possibleDirection === "up") {
+        return !notAllowedVerticalAdvance.includes(e.character);
       }
-      return validateNext(e.character);
-    }
-
-    return false;
-  });
-
-  const possibleNext = [...possibleNextX, ...possibleNextY].filter((cor) => {
-    const findIfPassed = passedCoordinates
-      .filter((e) => e.file.filename === mapFile.filename)
-      .filter((passedCor) => {
-        if (
-          passedCor.coordinates.xPosition === cor.xPosition &&
-          passedCor.coordinates.yPosition === cor.yPosition
-        ) {
-          const collectTwice = isCollectedTwice(cSystem, passedCor.coordinates);
-          if (
-            collectTwice &&
-            collectTwice.corToTest.xPosition ===
-              passedCor.coordinates.xPosition &&
-            collectTwice.corToTest.yPosition === passedCor.coordinates.yPosition
-          ) {
-            return false;
-          }
-
-          return true;
-        } else {
-          return false;
-        }
-      });
-
-    if (findIfPassed.length) {
-      return false;
-    }
-
-    return true;
-  });
-
-  // console.log(
-  //   passedCoordinates.map((e) => e.coordinates),
-  //   passedCoordinates.length,
-  //   "AAAA"
-  // );
-
-  if (possibleNext.length) {
-    // console.log(possibleNext, possibleNext.length);
-
-    /*
-    const collectTwice = isCollectedTwice(cSystem, possibleNext[0]);
-
-    const passedOnce = passedOnceCoordinates.filter(
-      (e) => e.file.filename === mapFile.filename
-    )[0]?.coordinates;
-
-    if (
-      collectTwice &&
-      collectTwice.corToTest &&
-      JSON.stringify(collectTwice.corToTest) === JSON.stringify(possibleNext[0])
-    ) {
-      console.log(collectTwice);
-      // result.push(collectTwice.corToTest.character);
-      passedOnceCoordinates = [
-        ...passedOnceCoordinates,
-        { file: mapFile, coordinates: collectTwice.corToTest },
-      ];
-    }
-*/
-
-    possibleNext.forEach((e) => {
-      const collectTwice = isCollectedTwice(cSystem, e);
-
-      const passedOnce = passedOnceCoordinates
-        .filter((el) => {
-          if (el.file.filename === mapFile.filename) {
-            return true;
-          }
-        })
-        .map((el) => el.coordinates)[0];
-
-      if (
-        collectTwice &&
-        collectTwice.corToTest &&
-        JSON.stringify(collectTwice.corToTest) === JSON.stringify(e)
-      ) {
-        passedOnceCoordinates.push({
-          file: mapFile,
-          coordinates: collectTwice.corToTest,
-        });
-      }
-
-      if (possibleNext.length === 1) {
-        result.push(e.character);
-        result2.push(e);
-
-        passedCoordinates.push({ file: mapFile, coordinates: e });
-
-        // result2.push(e.character);
-      } else {
-        const prev = result2[result2.length - 1];
-        if (prev.character === e.character) {
-          result.push(e.character);
-          passedCoordinates.push({ file: mapFile, coordinates: e });
-        } else {
-          result.push(e.character);
-          passedCoordinates.push({ file: mapFile, coordinates: e });
-        }
+      if (possibleDirection === "down") {
+        return !notAllowedVerticalAdvance.includes(e.character);
       }
     });
 
-    // result.push(possibleNext[0].character);
-
-    /*
-    passedCoordinates = [
-      ...passedCoordinates,
-      ...possibleNext
-        .map((e) => {
-          return { file: mapFile, coordinates: e };
-        })
-        .filter((e) => e),
-    ];
-
-*/
-
-    possibleNext.forEach((cor) => {
-      findPossibleNext(cSystem, cor, mapFile, result, result2);
-    });
-    return { result, result2 };
+  // if only one possible option, take it
+  if (next.length === 1) {
+    pushToResult(next[0], result);
+    findPossibleNext(cSystem, next[0], result);
+    return result;
   } else {
-    return { result, result2 };
+    // find previous direction so we can try to keep going the same way
+    const direction = calculateDirection(prevPrev, prev);
+
+    let nextFound = false;
+
+    if (direction === "right") {
+      const nextRight = next.find(
+        (e) =>
+          e.xPosition === prev.xPosition + 1 &&
+          e.yPosition === prev.yPosition &&
+          !notAllowedHorizontalAdvance.includes(e.character)
+      );
+      if (nextRight) {
+        nextFound = true;
+        pushToResult(nextRight, result);
+        findPossibleNext(cSystem, nextRight, result);
+        return result;
+      }
+    }
+
+    if (direction === "left") {
+      const nextLeft = next.find(
+        (e) =>
+          e.xPosition === prev.xPosition - 1 &&
+          e.yPosition === prev.yPosition &&
+          !notAllowedHorizontalAdvance.includes(e.character)
+      );
+      if (nextLeft) {
+        nextFound = true;
+        pushToResult(nextLeft, result);
+        findPossibleNext(cSystem, nextLeft, result);
+        return result;
+      }
+    }
+
+    if (direction === "down") {
+      const nextDown = next.find(
+        (e) =>
+          e.yPosition === prev.yPosition - 1 &&
+          e.xPosition === prev.xPosition &&
+          !notAllowedVerticalAdvance.includes(e.character)
+      );
+      if (nextDown) {
+        nextFound = true;
+        pushToResult(nextDown, result);
+        findPossibleNext(cSystem, nextDown, result);
+        return result;
+      }
+    }
+
+    if (direction === "up") {
+      const nextUp = next.find(
+        (e) =>
+          e.yPosition === prev.yPosition + 1 &&
+          e.xPosition === prev.xPosition &&
+          !notAllowedVerticalAdvance.includes(e.character)
+      );
+      if (nextUp) {
+        nextFound = true;
+        pushToResult(nextUp, result);
+        findPossibleNext(cSystem, nextUp, result);
+        return result;
+      }
+    }
+
+    // if no match found
+    if (!nextFound) {
+      const areNotPassed = next.filter(
+        (e) =>
+          !result.find(
+            (res) =>
+              e.xPosition === res.xPosition && e.yPosition === res.yPosition
+          )
+      );
+      if (!areNotPassed.length) {
+        // try do jump one field based on direction and character
+        if (
+          (direction === "down" || direction === "up") &&
+          prev.character === "|"
+        ) {
+          const jumpOne = cSystem.find(
+            (e) =>
+              e.yPosition ===
+                (direction === "down"
+                  ? prev.yPosition - 1
+                  : prev.yPosition + 1) && e.xPosition === prev.xPosition
+          );
+          const jumpTwo = cSystem.find(
+            (e) =>
+              e.yPosition ===
+                (direction === "down"
+                  ? prev.yPosition - 2
+                  : prev.yPosition + 2) && e.xPosition === prev.xPosition
+          );
+          // jump only over allowed characters
+          if (!validCharactersToJump.includes(jumpOne?.character)) {
+            return;
+          }
+
+          if (jumpOne && jumpTwo) {
+            nextFound = true;
+            pushToResult(jumpOne, result);
+            pushToResult(jumpTwo, result);
+            findPossibleNext(cSystem, jumpTwo, result);
+            return result;
+          }
+        }
+        // LEFT and RIGHT are not implemented since no map examples were provided
+
+        return;
+      }
+
+      watchForForks(prev, next, result);
+      // next block is for debugging
+      if (areNotPassed.length === 1) {
+        nextFound = true;
+        pushToResult(areNotPassed[0], result);
+        findPossibleNext(cSystem, areNotPassed[0], result);
+        return result;
+      } else {
+      }
+    }
   }
+
+  return result;
 };
 
 export const validateMap = (mapFile: MapFile) => {
@@ -350,17 +372,18 @@ export const validateMap = (mapFile: MapFile) => {
     return false;
   }
 
-  // multiple ends
+  // multiple ends (not requested, so not implemented)
+  /*
   if (arrayOfCharacters.filter((e) => e.includes("x")).length > 1) {
     return false;
   }
+  */
 
   return true;
 };
 
 export const convertToCoordinateSystem = (mapFile: MapFile) => {
   const arrayOfCharacters = mapFile.fileData.split("");
-  // console.log(arrayOfCharacters);
 
   let coordinateSystem: CoordinateSystem = [];
 
@@ -385,65 +408,82 @@ export const convertToCoordinateSystem = (mapFile: MapFile) => {
   return coordinateSystem;
 };
 
-export const walkOver = (cSystem: CoordinateSystem, mapFile: MapFile) => {
+export const followMap = (cSystem: CoordinateSystem) => {
   const startCoordinates = cSystem.find((e) => e.character === "@");
-  const endCoordinates = cSystem.find((e) => e.character === "x");
-
-  const { result, result2 } = findPossibleNext(
-    cSystem,
+  const result = findPossibleNext(cSystem, startCoordinates, [
     startCoordinates,
-    mapFile
-  );
+  ]);
+
+  const resultString = result
+    .map((e) => e.character)
+    .toString()
+    .replaceAll(",", "");
 
   // construct path as chars
-  const pathAsCharacters =
-    "@" + result.toString().replaceAll(",", "").split("x")[0] + "x";
+  const pathAsCharacters = resultString;
 
-  const letters = pathAsCharacters.replace(/[^A-Z]/g, "");
+  const letters = result
+    .filter((e) => !e.alreadyCollected)
+    .map((e) => e.character)
+    .toString()
+    .replaceAll(",", "")
+    .replace(/[^A-Z]/g, "");
 
   const hasError = (() => {
-    if (!result.toString().replaceAll(",", "").includes("x")) {
+    if (result.find((e) => e.error)) {
       return true;
     }
+
+    if (!resultString.includes("x")) {
+      return true;
+    }
+
+    return false;
   })();
 
   return { pathAsCharacters, letters, hasError };
 };
 
-export const processFile = (mapFile: MapFile, failedFiles: string[]) => {
-  Log.info("Map file name: " + mapFile.filename);
-  Log.info("Map raw shape:");
-  console.log(mapFile.fileData);
+export const processFile = (
+  mapFile: MapFile,
+  failedFiles: string[],
+  skipPrint: boolean = false
+) => {
+  !skipPrint && Log.info("Map file name: " + mapFile.filename);
+  !skipPrint && Log.info("Map raw shape: ");
+  !skipPrint && Log.green(mapFile.fileData);
 
   if (!validateMap(mapFile)) {
-    Log.error("Error while processing map " + mapFile.filename);
-    failedFiles.push(mapFile.filename);
-  } else {
-    const cSystem = convertToCoordinateSystem(mapFile);
-    // console.log(cSystem);
+    !skipPrint && Log.error("Error while processing map " + mapFile.filename);
+    !skipPrint && Log.info("");
+    !skipPrint && failedFiles.push(mapFile.filename);
+    return { error: true };
+  }
+  const cSystem = convertToCoordinateSystem(mapFile);
 
-    const hasFakeTurn = findFakeTurn(cSystem);
-
-    if (hasFakeTurn) {
-      Log.error("Error while processing map " + mapFile.filename);
-      failedFiles.push(mapFile.filename);
-      return;
-    }
-
-    const { pathAsCharacters, letters, hasError } = walkOver(cSystem, mapFile);
-
-    if (hasFakeTurn) {
-      Log.error("Error while processing map " + mapFile.filename);
-      failedFiles.push(mapFile.filename);
-      return;
-    }
-
-    Log.info("Letters:");
-    console.log(letters);
-    console.log("");
-    Log.info("Path as Characters:");
-    console.log(pathAsCharacters);
+  const hasFakeTurn = findFakeTurn(cSystem);
+  if (hasFakeTurn) {
+    !skipPrint && Log.error("Error while processing map " + mapFile.filename);
+    !skipPrint && Log.info("");
+    !skipPrint && failedFiles.push(mapFile.filename);
+    return { error: true };
   }
 
-  console.log("");
+  const { pathAsCharacters, letters, hasError } = followMap(cSystem);
+
+  if (hasError) {
+    !skipPrint && Log.error("Error while processing map " + mapFile.filename);
+    !skipPrint && Log.info("");
+    !skipPrint && failedFiles.push(mapFile.filename);
+    return { error: true };
+    return;
+  }
+
+  !skipPrint && Log.info("Letters:");
+  !skipPrint && Log.blue(letters);
+  !skipPrint && Log.info("");
+  !skipPrint && Log.info("Path as Characters:");
+  !skipPrint && Log.blue(pathAsCharacters);
+  !skipPrint && Log.info("");
+  return { error: false, letters, pathAsCharacters };
 };

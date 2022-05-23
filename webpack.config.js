@@ -4,12 +4,16 @@ const webpack = require("webpack");
 const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
-  entry: path.join(__dirname, "src/index.ts"),
+  entry: {
+    index: path.join(__dirname, "src/index.ts"),
+    "index.test": path.join(__dirname, "src/index.test.ts"),
+  },
   output: {
-    filename: "index.js",
+    filename: "[name].js",
     path: `${__dirname}/build`,
     libraryTarget: "commonjs2",
   },
+  externals: [nodeExternals()],
   target: "node",
   module: {
     rules: [
@@ -28,10 +32,6 @@ module.exports = {
   },
   performance: {
     hints: false,
-  },
-  node: {
-    __dirname: false,
-    __filename: false,
   },
   plugins: [
     new CopyPlugin({
