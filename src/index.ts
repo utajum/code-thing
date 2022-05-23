@@ -18,8 +18,8 @@ fs.readdirSync(mapsDir).forEach((filename) => {
 
 const firstQuestion = "Chose Map";
 const secondQuestion = "Process all Maps";
-const thirdQuestion = "Exit";
-const test = "TESTS";
+const thirdQuestion = "Run Jest Tests";
+const fourthQuestion = "Exit";
 
 Log.info(`NODE version: ${process.version}`);
 
@@ -31,7 +31,7 @@ const initQuestions = () => {
         type: "list",
         name: "run",
         message: "What do you want to do?",
-        choices: [firstQuestion, secondQuestion, thirdQuestion, test],
+        choices: [firstQuestion, secondQuestion, thirdQuestion, fourthQuestion],
       },
     ])
     .then((answers) => {
@@ -68,10 +68,10 @@ const initQuestions = () => {
         }
         initQuestions();
       }
-      if (answers.run === thirdQuestion) {
+      if (answers.run === fourthQuestion) {
         process.exit(0);
       }
-      if (answers.run === test) {
+      if (answers.run === thirdQuestion) {
         const jestConfig = `
           module.exports = {
             testEnvironment: "node",
@@ -117,7 +117,10 @@ const initQuestions = () => {
         jest.run([`--config='${dirToWrite}/jest.config.js'`]);
         setTimeout(() => {
           initQuestions();
-        }, 3000);
+        }, 4000);
+      }
+      if (answers.run === fourthQuestion) {
+        process.exit(0);
       }
     })
     .catch((error) => {
